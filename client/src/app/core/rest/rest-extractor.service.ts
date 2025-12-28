@@ -1,10 +1,25 @@
-import { HttpHeaderResponse } from '@angular/common/http'
+import { HttpHeaderResponse, HttpErrorResponse } from '@angular/common/http'
 import { Injectable, LOCALE_ID, inject } from '@angular/core'
 import { Router } from '@angular/router'
 import { DateFormat, dateToHuman } from '@app/helpers'
 import { HttpStatusCode, HttpStatusCodeType, ResultList } from '@peertube/peertube-models'
 import { PeerTubeHTTPError, PeerTubeReconnectError } from '@root-helpers/errors'
-import { throwError as observableThrowError } from 'rxjs'
+import { throwError as observableThrowError, Observable } from 'rxjs'
+
+// interface definida localmente para remover o any do corpo de erro
+interface PeerTubeErrorBody {
+  error?: string
+  detail?: string
+  title?: string
+  errors?: {
+    [key: string]: {
+      msg: string
+      value: any
+      param: string
+      location: string
+    }
+  }
+}
 
 @Injectable()
 export class RestExtractor {
@@ -32,11 +47,13 @@ export class RestExtractor {
     return this.applyToResultListData(result, this.convertDateToHuman.bind(this), [ fieldsToConvert, format ])
   }
 
-  convertDateToHuman (target: any, fieldsToConvert: string[], format?: DateFormat) {
+  // substituicao do any por um tipo genérico que estende um objeto
+  convertDateToHuman<T extends object> (target: T, fieldsToConvert: string[], format?: DateFormat): T {
     fieldsToConvert.forEach(field => {
-      if (!target[field]) return
+      const value = (target as any)[field]
+      if (!value) return
 
-      target[field] = dateToHuman(this.localeId, new Date(target[field]), format)
+      (target as any)[field] = dateToHuman(this.localeId, new Date(value), format)
     })
 
     return target
@@ -46,28 +63,24 @@ export class RestExtractor {
     obj: { status: HttpStatusCodeType },
     type: 'video' | 'other',
     status: HttpStatusCodeType[] = [ HttpStatusCode.NOT_FOUND_404 ]
-  ) {
+  ): Observable<never> {
     if (obj?.status && status.includes(obj.status)) {
-      // Do not use redirectService to avoid circular dependencies
       this.router.navigate([ '/404' ], { state: { type, obj }, skipLocationChange: true })
     }
 
     return observableThrowError(() => obj)
   }
 
-  handleError (err: any) {
+  
+  handleError (err: HttpErrorResponse | PeerTubeReconnectError | Error | any) {
     const errorMessage = this.buildErrorMessage(err)
 
-    const errorObj: { message: string, status: string, body: string, headers: HttpHeaderResponse } = {
-      message: errorMessage,
-      status: undefined,
-      body: undefined,
-      headers: err.headers
-    }
 
-    if (err.status) {
-      errorObj.status = err.status
-      errorObj.body = err.error
+    const errorObj = {
+      message: errorMessage,
+      status: (err instanceof HttpErrorResponse) ? err.status : undefined,
+      body: (err instanceof HttpErrorResponse) ? err.error : undefined,
+      headers: (err instanceof HttpErrorResponse) ? err.headers : undefined
     }
 
     return observableThrowError(() => {
@@ -75,12 +88,12 @@ export class RestExtractor {
         return err
       }
 
-      if (err.status) {
+      if (err instanceof HttpErrorResponse) {
         return new PeerTubeHTTPError(errorMessage, {
           status: err.status,
           body: errorObj.body,
           headers: errorObj.headers,
-          url: err.url
+          url: err.url || ''
         })
       }
 
@@ -88,20 +101,27 @@ export class RestExtractor {
     })
   }
 
-  private buildErrorMessage (err: any) {
-    if (err.error instanceof Error) return err.error.detail || err.error.title
-    if (typeof err.error === 'string') return err.error
-    if (err.status !== undefined) return this.buildServerErrorMessage(err)
-    if (typeof err === 'string') return err
+  private buildErrorMessage (err: HttpErrorResponse | Error | any): string {
+    
+    if (err instanceof HttpErrorResponse && err.error instanceof Error) {
+      return err.error.message
+    }
+    
+    
+    if (err instanceof HttpErrorResponse && err.status !== undefined) {
+      return this.buildServerErrorMessage(err)
+    }
 
+    if (typeof err === 'string') return err
+    
     return err.message || err.detail || $localize`Unknown error`
   }
 
-  private buildServerErrorMessage (err: any) {
-    // A server-side error occurred.
-    if (err.error?.errors) {
-      const errors = err.error.errors
+  private buildServerErrorMessage (err: HttpErrorResponse): string {
+    const errorBody = err.error as PeerTubeErrorBody
 
+    if (errorBody?.errors) {
+      const errors = errorBody.errors
       return Object.keys(errors)
         .map(key => errors[key].msg)
         .join('. ')
@@ -130,6 +150,6 @@ export class RestExtractor {
       return $localize`Server is unavailable. Please retry later.`
     }
 
-    return err.error?.error || err.error?.detail || err.error?.title || $localize`Unknown server error`
+    return errorBody?.error || errorBody?.detail || errorBody?.title || $localize`Unknown server error`
   }
 }
