@@ -1,5 +1,5 @@
 // Thanks: https://github.com/evseevdev/ngx-textarea-autosize
-import { AfterViewInit, Directive, ElementRef, HostBinding, HostListener, inject } from '@angular/core'
+import { AfterViewInit, Directive, ElementRef, HostBinding, HostListener, inject, Renderer2 } from '@angular/core'
 
 @Directive({
   selector: 'textarea[myAutoResize]',
@@ -7,6 +7,8 @@ import { AfterViewInit, Directive, ElementRef, HostBinding, HostListener, inject
 })
 export class TextareaAutoResizeDirective implements AfterViewInit {
   private elem = inject(ElementRef)
+  // injetei o renderer pra evitar mexer no .style direto
+  private renderer = inject(Renderer2)
 
   @HostBinding('attr.rows')
   rows = '1'
@@ -20,9 +22,10 @@ export class TextareaAutoResizeDirective implements AfterViewInit {
   @HostListener('input')
   resize () {
     const textarea = this.elem.nativeElement as HTMLTextAreaElement
-    // Reset textarea height to auto that correctly calculate the new height
-    textarea.style.height = 'auto'
-    // Set new height
-    textarea.style.height = `${textarea.scrollHeight}px`
+    
+    // usei o renderer pra resetar a altura e depois aplicar o novo valor
+    // isso e mais seguro que mexer no objeto style diretamente
+    this.renderer.setStyle(textarea, 'height', 'auto')
+    this.renderer.setStyle(textarea, 'height', `${textarea.scrollHeight}px`)
   }
 }
