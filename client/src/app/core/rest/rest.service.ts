@@ -18,12 +18,16 @@ interface QueryStringFilterPrefixes {
   }
 }
 
-type ParseQueryStringFilters<K extends keyof any> = Partial<Record<K, ParseQueryHandlerResult | ParseQueryHandlerResult[]>>
-type ParseQueryStringFiltersResult<K extends keyof any> = ParseQueryStringFilters<K> & { search?: string }
+// trocamos 'keyof any' por 'string', que eh o que as chaves realmente são
+type ParseQueryStringFilters<K extends string> = Partial<Record<K, ParseQueryHandlerResult | ParseQueryHandlerResult[]>>
+type ParseQueryStringFiltersResult<K extends string> = ParseQueryStringFilters<K> & { search?: string }
+
+// tipo para os valores permitidos em parâmetros HTTP
+type HttpParamValue = string | number | boolean | (string | number | boolean)[] | undefined | null
 
 @Injectable()
 export class RestService {
-  addRestGetParams (params: HttpParams, pagination?: RestPagination, sort?: SortMeta | string) {
+  addRestGetParams (params: HttpParams, pagination?: RestPagination, sort?: SortMeta | string): HttpParams {
     let newParams = params
 
     if (pagination !== undefined) {
@@ -38,7 +42,7 @@ export class RestService {
     return newParams
   }
 
-  buildSortString (sort: SortMeta | string) {
+  buildSortString (sort: SortMeta | string): string {
     if (typeof sort === 'string') {
       return sort
     }
@@ -47,27 +51,30 @@ export class RestService {
     return sortPrefix + sort.field
   }
 
-  addArrayParams (params: HttpParams, name: string, values: (string | number)[]) {
+  addArrayParams (params: HttpParams, name: string, values: (string | number)[]): HttpParams {
+    let updatedParams = params
     for (const v of values) {
-      params = params.append(name, v)
+      updatedParams = updatedParams.append(name, v.toString())
     }
 
-    return params
+    return updatedParams
   }
 
-  addObjectParams (params: HttpParams, object: { [name: string]: any }) {
+  // substituímos any por uma record com tipos de valores aceitáveis para a Web API
+  addObjectParams (params: HttpParams, object: Record<string, HttpParamValue>): HttpParams {
+    let updatedParams = params
     for (const name of Object.keys(object)) {
       const value = object[name]
       if (value === undefined || value === null) continue
 
       if (Array.isArray(value)) {
-        params = this.addArrayParams(params, name, value)
+        updatedParams = this.addArrayParams(updatedParams, name, value as (string | number)[])
       } else {
-        params = params.set(name, value)
+        updatedParams = updatedParams.set(name, value.toString())
       }
     }
 
-    return params
+    return updatedParams
   }
 
   componentToRestPagination (componentPagination: ComponentPaginationLight): RestPagination {
@@ -79,70 +86,64 @@ export class RestService {
   }
 
   /*
-   * Returns an object containing the filters and the remaining search
+   * retorna um objeto contendo os filtros e a busca restante
    */
-  parseQueryStringFilter<T extends QueryStringFilterPrefixes> (q: string, prefixes: T): ParseQueryStringFiltersResult<keyof T> {
+  parseQueryStringFilter<T extends QueryStringFilterPrefixes> (q: string, prefixes: T): ParseQueryStringFiltersResult<Extract<keyof T, string>> {
     if (!q) return {}
 
     const tokens = this.tokenizeString(q)
-
-    // Build prefix array
-    const prefixeStrings = Object.values(prefixes)
-      .map(p => p.prefix)
+    const prefixeStrings = Object.values(prefixes).map(p => p.prefix)
 
     debugLogger(`Built tokens "${tokens.join(', ')}" for prefixes "${prefixeStrings.join(', ')}"`)
 
-    // Search is the querystring minus defined filters
     const searchTokens = tokens.filter(t => {
       return prefixeStrings.every(prefixString => t.startsWith(prefixString) === false)
     })
 
-    const additionalFilters: ParseQueryStringFilters<keyof T> = {}
+    // tipagem explícita para o acumulador de filtros
+    const additionalFilters = {} as ParseQueryStringFilters<Extract<keyof T, string>>
 
-    for (const prefixKey of Object.keys(prefixes) as (keyof T)[]) {
+    for (const prefixKey of Object.keys(prefixes)) {
       const prefixObj = prefixes[prefixKey]
       const prefix = prefixObj.prefix
 
       const matchedTokens = tokens.filter(t => t.startsWith(prefix))
-        .map(t => t.slice(prefix.length)) // Keep the value filter
-        .map(t => t.replace(/^"|"$/g, '')) // Remove ""
+        .map(t => t.slice(prefix.length))
+        .map(t => t.replace(/^"|"$/g, ''))
         .map(t => {
           if (prefixObj.handler) return prefixObj.handler(t)
 
           if (prefixObj.isBoolean) {
             if (t === 'true') return true
             if (t === 'false') return false
-
             return undefined
           }
 
           return t
         })
-        .filter(t => t !== null && t !== undefined)
+        .filter(t => t !== null && t !== undefined) as ParseQueryHandlerResult[]
 
       if (matchedTokens.length === 0) continue
 
-      additionalFilters[prefixKey] = prefixObj.multiple === true
+      const key = prefixKey as Extract<keyof T, string>
+      additionalFilters[key] = prefixObj.multiple === true
         ? matchedTokens
         : matchedTokens[0]
     }
 
     const search = searchTokens.join(' ') || undefined
-
     debugLogger('Built search: ' + search, additionalFilters)
 
     return {
       search,
-
       ...additionalFilters
     }
   }
 
-  tokenizeString (q: string) {
+  tokenizeString (q: string): string[] {
     if (!q) return []
 
-    // Tokenize the strings using spaces that are not in quotes
-    return q.match(/(?:[^\s"]+|"[^"]*")+/g)
-      .filter(token => !!token)
+    const matches = q.match(/(?:[^\s"]+|"[^"]*")+/g)
+    return matches ? matches.filter(token => !!token) : []
   }
 }
