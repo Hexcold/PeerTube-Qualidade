@@ -30,8 +30,9 @@ export class PeertubeCheckboxComponent implements ControlValueAccessor, AfterCon
 
   readonly templates = contentChildren(PeerTubeTemplateDirective)
 
-  labelTemplate: TemplateRef<any>
-  helpTemplate: TemplateRef<any>
+  // troquei o any por void porque esses templates nao recebem contexto externo
+  labelTemplate: TemplateRef<void>
+  helpTemplate: TemplateRef<void>
 
   ngAfterContentInit () {
     {
@@ -45,7 +46,8 @@ export class PeertubeCheckboxComponent implements ControlValueAccessor, AfterCon
     }
   }
 
-  propagateChange = (_: any) => {
+  // como e um checkbox o valor propagado sempre vai ser boolean
+  propagateChange = (_: boolean) => {
     // empty
   }
 
@@ -53,7 +55,8 @@ export class PeertubeCheckboxComponent implements ControlValueAccessor, AfterCon
     this.checked.set(checked)
   }
 
-  registerOnChange (fn: (_: any) => void) {
+  // tipando o parametro da funcao de callback pra boolean
+  registerOnChange (fn: (checked: boolean) => void) {
     this.propagateChange = fn
   }
 
