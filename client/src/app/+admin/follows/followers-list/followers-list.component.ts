@@ -1,6 +1,5 @@
 import { Component, OnInit, inject, viewChild } from '@angular/core'
-import { ConfirmService, Notifier } from '@app/core'
-import { formatICU } from '@app/helpers'
+import { Notifier } from '@app/core' // removi o confirmService daqui, agora o service cuida disso
 import { InstanceFollowService } from '@app/shared/shared-instance/instance-follow.service'
 import { PTDatePipe } from '@app/shared/shared-main/common/date.pipe'
 import { DataLoaderOptions, TableColumnInfo, TableComponent } from '@app/shared/shared-tables/table.component'
@@ -27,16 +26,15 @@ import { NumberFormatterPipe } from '../../../shared/shared-main/common/number-f
   ]
 })
 export class FollowersListComponent implements OnInit {
-  private confirmService = inject(ConfirmService)
   private notifier = inject(Notifier)
   private followService = inject(InstanceFollowService)
 
   readonly table = viewChild<TableComponent<ActorFollow>>('table')
 
   searchFilters: AdvancedInputFilter[] = []
-
   bulkActions: DropdownAction<ActorFollow[]>[] = []
 
+  // as colunas sao configuracao de ui, entao ficam aqui
   columns: TableColumnInfo<string>[] = [
     { id: 'follower', label: $localize`Follower`, sortable: false },
     { id: 'state', label: $localize`State`, sortable: true },
@@ -52,106 +50,40 @@ export class FollowersListComponent implements OnInit {
 
   ngOnInit () {
     this.searchFilters = this.followService.buildFollowsListFilters()
+    this.buildBulkActions()
+  }
 
+  // agrupei a definicao das acoes pra nao poluir o ngoninit
+  private buildBulkActions () {
     this.bulkActions = [
       {
         label: $localize`Reject`,
-        handler: follows => this.rejectFollower(follows),
+        handler: follows => this.handleAction(this.followService.rejectFollowerWithConfirmation(follows)),
         isDisplayed: follows => follows.every(f => f.state !== 'rejected')
       },
       {
         label: $localize`Accept`,
-        handler: follows => this.acceptFollower(follows),
+        handler: follows => this.handleAction(this.followService.acceptFollower(follows)),
         isDisplayed: follows => follows.every(f => f.state !== 'accepted')
       },
       {
         label: $localize`Delete`,
-        handler: follows => this.deleteFollowers(follows),
+        handler: follows => this.handleAction(this.followService.removeFollowerWithConfirmation(follows)),
         isDisplayed: follows => follows.every(f => f.state === 'rejected')
       }
     ]
   }
 
-  acceptFollower (follows: ActorFollow[]) {
-    this.followService.acceptFollower(follows)
-      .subscribe({
-        next: () => {
-          const message = formatICU(
-            $localize`Accepted {count, plural, =1 {{followerName} follow request} other {{count} follow requests}}`,
-            { count: follows.length, followerName: this.buildFollowerName(follows[0]) }
-          )
-          this.notifier.success(message)
-
-          this.table().loadData()
-        },
-
-        error: err => this.notifier.handleError(err)
-      })
-  }
-
-  async rejectFollower (follows: ActorFollow[]) {
-    const message = formatICU(
-      $localize`Do you really want to reject {count, plural, =1 {{followerName} follow request?} other {{count} follow requests?}}`,
-      { count: follows.length, followerName: this.buildFollowerName(follows[0]) }
-    )
-
-    const res = await this.confirmService.confirm(message, $localize`Reject`)
-    if (res === false) return
-
-    this.followService.rejectFollower(follows)
-      .subscribe({
-        next: () => {
-          const message = formatICU(
-            $localize`Rejected {count, plural, =1 {{followerName} follow request} other {{count} follow requests}}`,
-            { count: follows.length, followerName: this.buildFollowerName(follows[0]) }
-          )
-          this.notifier.success(message)
-
-          this.table().loadData()
-        },
-
-        error: err => this.notifier.handleError(err)
-      })
-  }
-
-  async deleteFollowers (follows: ActorFollow[]) {
-    const icuParams = { count: follows.length, followerName: this.buildFollowerName(follows[0]) }
-
-    let message = $localize`Deleted followers will be able to send again a follow request.`
-    message += '<br /><br />'
-
-    message += formatICU(
-      $localize`Do you really want to delete {count, plural, =1 {{followerName} follow request?} other {{count} follow requests?}}`,
-      icuParams
-    )
-
-    const res = await this.confirmService.confirm(message, $localize`Delete`)
-    if (res === false) return
-
-    this.followService.removeFollower(follows)
-      .subscribe({
-        next: () => {
-          const message = formatICU(
-            $localize`Removed {count, plural, =1 {{followerName} follow request} other {{count} follow requests}}`,
-            icuParams
-          )
-
-          this.notifier.success(message)
-
-          this.table().loadData()
-        },
-
-        error: err => this.notifier.handleError(err)
-      })
-  }
-
-  buildFollowerName (follow: ActorFollow) {
-    return follow.follower.name + '@' + follow.follower.host
+  // criei um handler generico pra reduzir a repeticao de codigo de sucesso/erro
+  private handleAction (observable: any) {
+    observable.subscribe({
+      next: () => this.table().loadData(),
+      error: (err: any) => this.notifier.handleError(err)
+    })
   }
 
   private _dataLoader (options: DataLoaderOptions) {
     const { pagination, sort, search } = options
-
     return this.followService.getFollowers({ pagination, sort, search })
   }
 }
