@@ -1,11 +1,12 @@
 import { CommonModule, NgClass } from '@angular/common'
 import { Component, OnInit, inject } from '@angular/core'
-import { FormsModule, ReactiveFormsModule } from '@angular/forms'
+import { FormsModule, ReactiveFormsModule, FormGroup } from '@angular/forms' // adicionei o formgroup
 import { AuthService, ServerService, UserService } from '@app/core'
 import { LOGIN_PASSWORD_VALIDATOR } from '@app/shared/form-validators/login-validators'
 import { USER_EMAIL_VALIDATOR } from '@app/shared/form-validators/user-validators'
-import { FormReactive } from '@app/shared/shared-forms/form-reactive'
-import { FormReactiveService } from '@app/shared/shared-forms/form-reactive.service'
+// removi o import do formreactive e usei o service que a gente ja limpou
+import { FormValidatorService } from '@app/shared/shared-forms/form-validator.service'
+import { FormReactiveErrors, FormReactiveMessages } from '@app/shared/shared-forms/form-reactive.service'
 import { AlertComponent } from '@app/shared/shared-main/common/alert.component'
 import { HttpStatusCode, User } from '@peertube/peertube-models'
 import { forkJoin } from 'rxjs'
@@ -18,11 +19,17 @@ import { InputTextComponent } from '../../../shared/shared-forms/input-text.comp
   styleUrls: [ './my-account-change-email.component.scss' ],
   imports: [ CommonModule, FormsModule, ReactiveFormsModule, NgClass, InputTextComponent, AlertComponent ]
 })
-export class MyAccountChangeEmailComponent extends FormReactive implements OnInit {
-  protected formReactiveService = inject(FormReactiveService)
+// removi o extends pra usar composicao
+export class MyAccountChangeEmailComponent implements OnInit {
   private authService = inject(AuthService)
   private userService = inject(UserService)
   private serverService = inject(ServerService)
+  private formValidatorService = inject(FormValidatorService)
+
+  // declarei as variaveis que antes vinham por herança
+  form: FormGroup
+  formErrors: FormReactiveErrors
+  validationMessages: FormReactiveMessages
 
   verificationEmailSent = false
   error: string
@@ -30,10 +37,15 @@ export class MyAccountChangeEmailComponent extends FormReactive implements OnIni
   user: User
 
   ngOnInit () {
-    this.buildForm({
+    // agora uso o service pra buildar o form de troca de email
+    const { form, formErrors, validationMessages } = this.formValidatorService.internalBuildForm({
       'new-email': USER_EMAIL_VALIDATOR,
       'password': LOGIN_PASSWORD_VALIDATOR
     })
+
+    this.form = form
+    this.formErrors = formErrors
+    this.validationMessages = validationMessages
 
     this.user = this.authService.getUser()
   }
