@@ -1,13 +1,14 @@
 import { NgClass } from '@angular/common'
 import { AfterViewInit, Component, ElementRef, LOCALE_ID, OnInit, inject, viewChild } from '@angular/core'
-import { FormsModule, ReactiveFormsModule } from '@angular/forms'
+import { FormsModule, ReactiveFormsModule, FormGroup } from '@angular/forms' // adicionei o formgroup
 import { ActivatedRoute, Router, RouterLink } from '@angular/router'
 import { AuthService, Notifier, RedirectService, SessionStorageService, UserService } from '@app/core'
 import { HooksService } from '@app/core/plugins/hooks.service'
 import { LOGIN_PASSWORD_VALIDATOR, LOGIN_USERNAME_VALIDATOR } from '@app/shared/form-validators/login-validators'
 import { USER_OTP_TOKEN_VALIDATOR } from '@app/shared/form-validators/user-validators'
-import { FormReactive } from '@app/shared/shared-forms/form-reactive'
-import { FormReactiveService } from '@app/shared/shared-forms/form-reactive.service'
+// troquei a herança pelo serviço que ja refatoramos
+import { FormValidatorService } from '@app/shared/shared-forms/form-validator.service'
+import { FormReactiveErrors, FormReactiveMessages } from '@app/shared/shared-forms/form-reactive.service'
 import { InputTextComponent } from '@app/shared/shared-forms/input-text.component'
 import { InstanceAboutAccordionComponent } from '@app/shared/shared-instance/instance-about-accordion.component'
 import { AlertComponent } from '@app/shared/shared-main/common/alert.component'
@@ -39,8 +40,9 @@ import { PluginSelectorDirective } from '../shared/shared-main/plugins/plugin-se
     AlertComponent
   ]
 })
-export class LoginComponent extends FormReactive implements OnInit, AfterViewInit {
-  protected formReactiveService = inject(FormReactiveService)
+// removi o extends pra usar composicao
+export class LoginComponent implements OnInit, AfterViewInit {
+  private formValidatorService = inject(FormValidatorService)
   private route = inject(ActivatedRoute)
   private modalService = inject(NgbModal)
   private authService = inject(AuthService)
@@ -51,6 +53,11 @@ export class LoginComponent extends FormReactive implements OnInit, AfterViewIni
   private storage = inject(SessionStorageService)
   private router = inject(Router)
   private localeId = inject(LOCALE_ID)
+
+  // declarei as propriedades de formulario que antes eram herdadas
+  form: FormGroup
+  formErrors: FormReactiveErrors
+  validationMessages: FormReactiveMessages
 
   private static SESSION_STORAGE_REDIRECT_URL_KEY = 'login-previous-url'
 
@@ -110,15 +117,19 @@ export class LoginComponent extends FormReactive implements OnInit, AfterViewIni
   ngOnInit () {
     const snapshot = this.route.snapshot
 
-    // Avoid undefined errors when accessing form error properties
-    this.buildForm({
+    // agora uso o serviço injetado pra construir o formulario de login
+    const { form, formErrors, validationMessages } = this.formValidatorService.internalBuildForm({
       'username': LOGIN_USERNAME_VALIDATOR,
       'password': LOGIN_PASSWORD_VALIDATOR,
       'otp-token': {
-        VALIDATORS: [], // Will be set dynamically
+        VALIDATORS: [], 
         MESSAGES: USER_OTP_TOKEN_VALIDATOR.MESSAGES
       }
     })
+
+    this.form = form
+    this.formErrors = formErrors
+    this.validationMessages = validationMessages
 
     this.serverConfig = snapshot.data.serverConfig
 
