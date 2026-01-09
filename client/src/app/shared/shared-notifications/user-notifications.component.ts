@@ -1,66 +1,73 @@
-import { CommonModule } from '@angular/common'
-import { booleanAttribute, Component, inject, input, OnInit, output } from '@angular/core'
-import { RouterLink } from '@angular/router'
-import { ComponentPagination, hasMoreItems, Notifier } from '@app/core'
-import { Subject } from 'rxjs'
-import { InfiniteScrollerDirective } from '../shared-main/common/infinite-scroller.directive'
-import { UserNotification } from '../shared-main/users/user-notification.model'
-import { UserNotificationService } from '../shared-main/users/user-notification.service'
-import { UserNotificationContentComponent } from './user-notification-content.component'
+import { CommonModule } from "@angular/common";
+import {
+  booleanAttribute,
+  Component,
+  inject,
+  input,
+  OnInit,
+  output,
+} from "@angular/core";
+import { RouterLink } from "@angular/router";
+import { ComponentPagination, hasMoreItems, Notifier } from "@app/core";
+import { Subject } from "rxjs";
+import { InfiniteScrollerDirective } from "../shared-main/common/video-comment-list-admin-owner.component";
+import { UserNotification } from "../shared-main/users/user-notification.model";
+import { UserNotificationService } from "../shared-main/users/user-notification.service";
+import { UserNotificationContentComponent } from "./user-notification-content.component";
 
 @Component({
-  selector: 'my-user-notifications',
-  templateUrl: 'user-notifications.component.html',
-  styleUrls: [ 'user-notifications.component.scss' ],
+  selector: "my-user-notifications",
+  templateUrl: "user-notifications.component.html",
+  styleUrls: ["user-notifications.component.scss"],
   imports: [
     CommonModule,
     RouterLink,
     InfiniteScrollerDirective,
-    UserNotificationContentComponent
-  ]
+    UserNotificationContentComponent,
+  ],
 })
 export class UserNotificationsComponent implements OnInit {
-  private userNotificationService = inject(UserNotificationService)
-  private notifier = inject(Notifier)
+  private userNotificationService = inject(UserNotificationService);
+  private notifier = inject(Notifier);
 
-  readonly inPopup = input.required({ transform: booleanAttribute })
-  readonly ignoreLoadingBar = input(false)
-  readonly infiniteScroll = input(true)
-  readonly itemsPerPage = input(20)
-  readonly markAllAsReadSubject = input<Subject<boolean>>(undefined)
-  readonly userNotificationReload = input<Subject<boolean>>(undefined)
+  readonly inPopup = input.required({ transform: booleanAttribute });
+  readonly ignoreLoadingBar = input(false);
+  readonly infiniteScroll = input(true);
+  readonly itemsPerPage = input(20);
+  readonly markAllAsReadSubject = input<Subject<boolean>>(undefined);
+  readonly userNotificationReload = input<Subject<boolean>>(undefined);
 
-  readonly notificationsLoaded = output()
+  readonly notificationsLoaded = output();
 
-  notifications: UserNotification[] = []
-  sortField = 'createdAt'
+  notifications: UserNotification[] = [];
+  sortField = "createdAt";
 
-  componentPagination: ComponentPagination
+  componentPagination: ComponentPagination;
 
-  onDataSubject = new Subject<any[]>()
+  onDataSubject = new Subject<any[]>();
 
-  ngOnInit () {
+  ngOnInit() {
     this.componentPagination = {
       currentPage: 1,
       itemsPerPage: this.itemsPerPage(),
-      totalItems: null
-    }
+      totalItems: null,
+    };
 
-    this.loadNotifications()
+    this.loadNotifications();
 
-    const markAllAsReadSubject = this.markAllAsReadSubject()
+    const markAllAsReadSubject = this.markAllAsReadSubject();
     if (markAllAsReadSubject) {
-      markAllAsReadSubject.subscribe(() => this.markAllAsRead())
+      markAllAsReadSubject.subscribe(() => this.markAllAsRead());
     }
 
-    const userNotificationReload = this.userNotificationReload()
+    const userNotificationReload = this.userNotificationReload();
     if (userNotificationReload) {
-      userNotificationReload.subscribe(() => this.loadNotifications(true))
+      userNotificationReload.subscribe(() => this.loadNotifications(true));
     }
   }
 
-  loadNotifications (reset?: boolean) {
-    if (reset) this.componentPagination.currentPage = 1
+  loadNotifications(reset?: boolean) {
+    if (reset) this.componentPagination.currentPage = 1;
 
     const options = {
       pagination: this.componentPagination,
@@ -68,68 +75,67 @@ export class UserNotificationsComponent implements OnInit {
       sort: {
         field: this.sortField,
         // if we order by creation date, we want DESC. all other fields are ASC (like unread).
-        order: this.sortField === 'createdAt' ? -1 : 1
-      }
-    }
+        order: this.sortField === "createdAt" ? -1 : 1,
+      },
+    };
 
-    this.userNotificationService.listMyNotifications(options)
-      .subscribe({
-        next: result => {
-          this.notifications = reset ? result.data : this.notifications.concat(result.data)
-          this.componentPagination.totalItems = result.total
+    this.userNotificationService.listMyNotifications(options).subscribe({
+      next: (result) => {
+        this.notifications = reset
+          ? result.data
+          : this.notifications.concat(result.data);
+        this.componentPagination.totalItems = result.total;
 
-          this.notificationsLoaded.emit()
+        this.notificationsLoaded.emit();
 
-          this.onDataSubject.next(result.data)
-        },
+        this.onDataSubject.next(result.data);
+      },
 
-        error: err => this.notifier.handleError(err)
-      })
+      error: (err) => this.notifier.handleError(err),
+    });
   }
 
-  onNearOfBottom () {
-    if (this.infiniteScroll() === false) return
+  onNearOfBottom() {
+    if (this.infiniteScroll() === false) return;
 
-    this.componentPagination.currentPage++
+    this.componentPagination.currentPage++;
 
     if (hasMoreItems(this.componentPagination)) {
-      this.loadNotifications()
+      this.loadNotifications();
     }
   }
 
-  markAsRead (notification: UserNotification) {
-    if (notification.payload.read) return
+  markAsRead(notification: UserNotification) {
+    if (notification.payload.read) return;
 
-    this.userNotificationService.markAsRead(notification)
-      .subscribe({
-        next: () => {
-          notification.payload.read = true
-        },
+    this.userNotificationService.markAsRead(notification).subscribe({
+      next: () => {
+        notification.payload.read = true;
+      },
 
-        error: err => this.notifier.handleError(err)
-      })
+      error: (err) => this.notifier.handleError(err),
+    });
   }
 
-  markAllAsRead () {
-    this.userNotificationService.markAllAsRead()
-      .subscribe({
-        next: () => {
-          for (const notification of this.notifications) {
-            notification.payload.read = true
-          }
-        },
+  markAllAsRead() {
+    this.userNotificationService.markAllAsRead().subscribe({
+      next: () => {
+        for (const notification of this.notifications) {
+          notification.payload.read = true;
+        }
+      },
 
-        error: err => this.notifier.handleError(err)
-      })
+      error: (err) => this.notifier.handleError(err),
+    });
   }
 
-  changeSortColumn (column: string) {
+  changeSortColumn(column: string) {
     this.componentPagination = {
       currentPage: 1,
       itemsPerPage: this.itemsPerPage(),
-      totalItems: null
-    }
-    this.sortField = column
-    this.loadNotifications(true)
+      totalItems: null,
+    };
+    this.sortField = column;
+    this.loadNotifications(true);
   }
 }

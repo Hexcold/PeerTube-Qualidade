@@ -1,3 +1,5 @@
+// client/src/app/shared/shared-forms/reactive-file.component.ts
+
 import { CommonModule } from '@angular/common'
 import { Component, forwardRef, inject, input, OnChanges, OnInit, output } from '@angular/core'
 import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/forms'
@@ -33,22 +35,22 @@ export class ReactiveFileComponent implements OnInit, OnChanges, ControlValueAcc
   readonly icon = input<GlobalIconName>(undefined)
   readonly buttonTooltip = input<string>(undefined)
 
-  readonly fileChanged = output<Blob>()
+  readonly fileChanged = output<File | null>()
 
   classes: { [id: string]: boolean } = {}
   allowedExtensionsMessage = ''
-  fileInputValue: any
-  file: File
+  
+  // CORREÇÃO: Tipagem de any para string | null
+  fileInputValue: string | null = null 
+  file: File | null = null 
 
   get filename () {
     if (!this.file) return ''
-
     return this.file.name
   }
 
   ngOnInit () {
     this.allowedExtensionsMessage = this.extensions().join(', ')
-
     this.buildClasses()
   }
 
@@ -65,9 +67,12 @@ export class ReactiveFileComponent implements OnInit, OnChanges, ControlValueAcc
     }
   }
 
-  fileChange (event: any) {
-    if (event.target.files?.length) {
-      const [ file ] = event.target.files
+  // CORREÇÃO: Tipagem do evento de 'any' para 'Event'
+  fileChange (event: Event) {
+    const target = event.target as HTMLInputElement
+    
+    if (target.files?.length) {
+      const file = target.files[0]
 
       if (file.size > this.maxFileSize()) {
         this.notifier.error($localize`This file is too large.`)
@@ -78,34 +83,35 @@ export class ReactiveFileComponent implements OnInit, OnChanges, ControlValueAcc
       if (this.extensions().includes(extension.toLowerCase()) === false) {
         const message = $localize`PeerTube cannot handle this kind of file. Accepted extensions are ${this.allowedExtensionsMessage}.`
         this.notifier.error(message)
-
         return
       }
 
       this.file = file
-
       this.propagateChange(this.file)
     }
     this.fileChanged.emit(this.file)
   }
 
   reset () {
-    this.writeValue(undefined)
-    this.propagateChange(undefined)
-    this.fileChanged.emit(undefined)
+    this.writeValue(null)
+    this.propagateChange(null)
+    this.fileChanged.emit(null)
   }
 
-  propagateChange = (_: any) => {
+  // CORREÇÃO: Tipagem da função de propagação
+  propagateChange = (_: File | null) => {
     // empty
   }
 
-  writeValue (file: any) {
+  // CORREÇÃO: Tipagem do valor recebido do formulário
+  writeValue (file: File | null) {
     this.file = file
 
     if (!this.file) this.fileInputValue = null
   }
 
-  registerOnChange (fn: (_: any) => void) {
+  // CORREÇÃO: Tipagem do callback registrado
+  registerOnChange (fn: (value: File | null) => void) {
     this.propagateChange = fn
   }
 

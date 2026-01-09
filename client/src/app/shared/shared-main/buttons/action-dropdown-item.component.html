@@ -1,0 +1,44 @@
+<div [ngClass]="action().class">
+  @if (action().linkBuilder && !action().isHeader) {
+    <a [ngClass]="{ 'with-icon': !!action().iconName || !!action().actorAvatar }" 
+       class="dropdown-item"
+       [routerLink]="action().linkBuilder!(entry())" 
+       [queryParams]="getQueryParams()" 
+       [title]="action().title || ''">
+      <ng-container [ngTemplateOutlet]="content"></ng-container>
+    </a>
+  } @else if (!action().isHeader) {
+    <span [ngClass]="{ 'with-icon': !!action().iconName || !!action().actorAvatar }" 
+          class="custom-action dropdown-item"
+          tabindex="0" role="button" [title]="action().title || ''" 
+          (click)="action().handler!(entry())" (keyup.enter)="action().handler!(entry())">
+      <ng-container [ngTemplateOutlet]="content"></ng-container>
+    </span>
+  } @else {
+    <div [ngClass]="{ 'with-icon': !!action().iconName || !!action().actorAvatar }" 
+         class="dropdown-header" [title]="action().title || ''">
+      <ng-container [ngTemplateOutlet]="content"></ng-container>
+    </div>
+  }
+</div>
+
+<ng-template #content>
+  @if (action().iconName) {
+    <my-global-icon [iconName]="action().iconName!" [ngClass]="'icon-' + action().iconName" aria-hidden="true"></my-global-icon>
+  } @else if (action().actorAvatar) {
+    <my-actor-avatar size="24" [actor]="action().actorAvatar!.actor" [actorType]="action().actorAvatar!.type"></my-actor-avatar>
+  }
+
+  <div class="item-label">
+    <span class="d-inline-flex align-items-center">
+      {{ action().label }}
+      <ng-template [ngTemplateOutlet]="dropdownItemExtra() || null" [ngTemplateOutletContext]="{ action: action() }"></ng-template>
+      @if (action().ownerOrModeratorPrivilege && action().ownerOrModeratorPrivilege!()) {
+        <my-global-icon iconName="shield" class="owner-moderator-privilege" [ngbTooltip]="action().ownerOrModeratorPrivilege!()"></my-global-icon>
+      }
+    </span>
+    @if (action().description) { 
+      <small class="muted action-description">{{ action().description }}</small> 
+    }
+  </div>
+</ng-template>

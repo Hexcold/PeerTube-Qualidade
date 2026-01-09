@@ -1,3 +1,5 @@
+// client/src/app/shared/shared-forms/select/select-options.component.ts
+
 import { CommonModule } from '@angular/common'
 import {
   booleanAttribute,
@@ -17,10 +19,8 @@ import { SelectOptionsItem } from '../../../../types/select-options-item.model'
 
 @Component({
   selector: 'my-select-options',
-
   templateUrl: './select-options.component.html',
   styleUrls: [ './select-options.component.scss' ],
-
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -34,34 +34,28 @@ export class SelectOptionsComponent implements ControlValueAccessor {
   private cd = inject(ChangeDetectorRef)
 
   readonly items = input<SelectOptionsItem[]>([])
-
   readonly inputId = input.required<string>()
-
   readonly clearable = input(false, { transform: booleanAttribute })
   readonly filter = input(false, { transform: booleanAttribute })
-
   readonly virtualScroll = input(false, { transform: booleanAttribute })
   readonly virtualScrollItemSize = input(39, { transform: numberAttribute })
 
   @ContentChild('selectOption', { descendants: false })
-  selectOptionTemplate: TemplateRef<any>
+  selectOptionTemplate: TemplateRef<{ $implicit: SelectOptionsItem }>
 
   @ContentChild('itemExtra', { descendants: false })
-  itemExtraTemplate: TemplateRef<any>
+  itemExtraTemplate: TemplateRef<{ $implicit: SelectOptionsItem }>
 
   selectedId: number | string
   disabled = false
-
   wroteValue: number | string
 
-  propagateChange = (_: any) => {
+  propagateChange = (_: number | string) => {
     // empty
   }
 
-  // Allow plugins to update our value
   @HostListener('change', [ '$event.target' ])
   handleChange (target: HTMLInputElement) {
-    // Prevent the primeng search input to update our value
     if (target.role === 'searchbox') return
 
     this.writeValue(target.value)
@@ -70,13 +64,11 @@ export class SelectOptionsComponent implements ControlValueAccessor {
 
   writeValue (id: number | string) {
     this.selectedId = id
-
-    // https://github.com/primefaces/primeng/issues/14609 workaround
     this.wroteValue = id
     this.cd.detectChanges()
   }
 
-  registerOnChange (fn: (_: any) => void) {
+  registerOnChange (fn: (id: number | string) => void) {
     this.propagateChange = fn
   }
 
@@ -90,7 +82,6 @@ export class SelectOptionsComponent implements ControlValueAccessor {
     }
 
     this.wroteValue = undefined
-
     this.propagateChange(this.selectedId)
   }
 
@@ -98,7 +89,7 @@ export class SelectOptionsComponent implements ControlValueAccessor {
     this.disabled = isDisabled
   }
 
-  getSelectedItem () {
+  getSelectedItem (): SelectOptionsItem | undefined {
     return this.items().find(i => i.id === this.selectedId)
   }
 }

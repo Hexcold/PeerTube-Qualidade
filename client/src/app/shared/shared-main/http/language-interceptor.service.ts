@@ -1,3 +1,5 @@
+// client/src/app/shared/shared-main/buttons/action-dropdown.component.ts
+
 import { HttpHandlerFn, HttpRequest } from '@angular/common/http'
 import { inject, LOCALE_ID } from '@angular/core'
 import { getBackendUrl } from '@app/helpers'

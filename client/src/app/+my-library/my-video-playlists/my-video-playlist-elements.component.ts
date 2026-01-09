@@ -1,22 +1,32 @@
-import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop'
-import { Component, OnDestroy, OnInit, inject, viewChild } from '@angular/core'
-import { ActivatedRoute, Router } from '@angular/router'
-import { ComponentPagination, ConfirmService, HooksService, Notifier, ScreenService, updatePaginationOnDelete } from '@app/core'
-import { ButtonComponent } from '@app/shared/shared-main/buttons/button.component'
-import { VideoShareComponent } from '@app/shared/shared-share-modal/video-share.component'
-import { VideoPlaylistElement } from '@app/shared/shared-video-playlist/video-playlist-element.model'
-import { VideoPlaylist } from '@app/shared/shared-video-playlist/video-playlist.model'
-import { VideoPlaylistService } from '@app/shared/shared-video-playlist/video-playlist.service'
-import { VideoPlaylistType } from '@peertube/peertube-models'
-import { Subject, Subscription } from 'rxjs'
-import { ActionDropdownComponent, DropdownAction } from '../../shared/shared-main/buttons/action-dropdown.component'
-import { InfiniteScrollerDirective } from '../../shared/shared-main/common/infinite-scroller.directive'
-import { VideoPlaylistElementMiniatureComponent } from '../../shared/shared-video-playlist/video-playlist-element-miniature.component'
-import { VideoPlaylistMiniatureComponent } from '../../shared/shared-video-playlist/video-playlist-miniature.component'
+import { CdkDrag, CdkDragDrop, CdkDropList } from "@angular/cdk/drag-drop";
+import { Component, OnDestroy, OnInit, inject, viewChild } from "@angular/core";
+import { ActivatedRoute, Router } from "@angular/router";
+import {
+  ComponentPagination,
+  ConfirmService,
+  HooksService,
+  Notifier,
+  ScreenService,
+  updatePaginationOnDelete,
+} from "@app/core";
+import { ButtonComponent } from "@app/shared/shared-main/buttons/button.component";
+import { VideoShareComponent } from "@app/shared/shared-share-modal/video-share.component";
+import { VideoPlaylistElement } from "@app/shared/shared-video-playlist/video-playlist-element.model";
+import { VideoPlaylist } from "@app/shared/shared-video-playlist/video-playlist.model";
+import { VideoPlaylistService } from "@app/shared/shared-video-playlist/video-playlist.service";
+import { VideoPlaylistType } from "@peertube/peertube-models";
+import { Subject, Subscription } from "rxjs";
+import {
+  ActionDropdownComponent,
+  DropdownAction,
+} from "../../shared/shared-main/buttons/action-dropdown.component";
+import { InfiniteScrollerDirective } from "../../shared/shared-main/common/video-comment-list-admin-owner.component";
+import { VideoPlaylistElementMiniatureComponent } from "../../shared/shared-video-playlist/video-playlist-element-miniature.component";
+import { VideoPlaylistMiniatureComponent } from "../../shared/shared-video-playlist/video-playlist-miniature.component";
 
 @Component({
-  templateUrl: './my-video-playlist-elements.component.html',
-  styleUrls: [ './my-video-playlist-elements.component.scss' ],
+  templateUrl: "./my-video-playlist-elements.component.html",
+  styleUrls: ["./my-video-playlist-elements.component.scss"],
   imports: [
     ButtonComponent,
     VideoPlaylistMiniatureComponent,
@@ -25,134 +35,147 @@ import { VideoPlaylistMiniatureComponent } from '../../shared/shared-video-playl
     CdkDropList,
     CdkDrag,
     VideoPlaylistElementMiniatureComponent,
-    VideoShareComponent
-  ]
+    VideoShareComponent,
+  ],
 })
 export class MyVideoPlaylistElementsComponent implements OnInit, OnDestroy {
-  private hooks = inject(HooksService)
-  private notifier = inject(Notifier)
-  private router = inject(Router)
-  private confirmService = inject(ConfirmService)
-  private route = inject(ActivatedRoute)
-  private screenService = inject(ScreenService)
-  private videoPlaylistService = inject(VideoPlaylistService)
+  private hooks = inject(HooksService);
+  private notifier = inject(Notifier);
+  private router = inject(Router);
+  private confirmService = inject(ConfirmService);
+  private route = inject(ActivatedRoute);
+  private screenService = inject(ScreenService);
+  private videoPlaylistService = inject(VideoPlaylistService);
 
-  readonly videoShareModal = viewChild<VideoShareComponent>('videoShareModal')
+  readonly videoShareModal = viewChild<VideoShareComponent>("videoShareModal");
 
-  playlistElements: VideoPlaylistElement[] = []
-  playlist: VideoPlaylist
+  playlistElements: VideoPlaylistElement[] = [];
+  playlist: VideoPlaylist;
 
-  playlistActions: DropdownAction<VideoPlaylist>[][] = []
+  playlistActions: DropdownAction<VideoPlaylist>[][] = [];
 
   pagination: ComponentPagination = {
     currentPage: 1,
     itemsPerPage: 10,
-    totalItems: null
-  }
+    totalItems: null,
+  };
 
-  onDataSubject = new Subject<any[]>()
+  onDataSubject = new Subject<any[]>();
 
-  private videoPlaylistId: string | number
-  private paramsSub: Subscription
+  private videoPlaylistId: string | number;
+  private paramsSub: Subscription;
 
-  ngOnInit () {
+  ngOnInit() {
     this.playlistActions = [
       [
         {
           label: $localize`Update playlist`,
-          iconName: 'edit',
-          linkBuilder: playlist => [ '/my-library', 'video-playlists', 'update', playlist.shortUUID ]
+          iconName: "edit",
+          linkBuilder: (playlist) => [
+            "/my-library",
+            "video-playlists",
+            "update",
+            playlist.shortUUID,
+          ],
         },
         {
           label: $localize`Delete playlist`,
-          iconName: 'delete',
-          handler: playlist => this.deleteVideoPlaylist(playlist)
-        }
-      ]
-    ]
+          iconName: "delete",
+          handler: (playlist) => this.deleteVideoPlaylist(playlist),
+        },
+      ],
+    ];
 
-    this.paramsSub = this.route.params.subscribe(routeParams => {
-      this.videoPlaylistId = routeParams['videoPlaylistId']
-      this.loadElements()
+    this.paramsSub = this.route.params.subscribe((routeParams) => {
+      this.videoPlaylistId = routeParams["videoPlaylistId"];
+      this.loadElements();
 
-      this.loadPlaylistInfo()
-    })
+      this.loadPlaylistInfo();
+    });
   }
 
-  ngOnDestroy () {
-    if (this.paramsSub) this.paramsSub.unsubscribe()
+  ngOnDestroy() {
+    if (this.paramsSub) this.paramsSub.unsubscribe();
   }
 
-  drop (event: CdkDragDrop<any>) {
-    const previousIndex = event.previousIndex
-    const newIndex = event.currentIndex
+  drop(event: CdkDragDrop<any>) {
+    const previousIndex = event.previousIndex;
+    const newIndex = event.currentIndex;
 
-    if (previousIndex === newIndex) return
+    if (previousIndex === newIndex) return;
 
-    const oldPosition = this.playlistElements[previousIndex].position
-    let insertAfter = this.playlistElements[newIndex].position
+    const oldPosition = this.playlistElements[previousIndex].position;
+    let insertAfter = this.playlistElements[newIndex].position;
 
-    if (oldPosition > insertAfter) insertAfter--
+    if (oldPosition > insertAfter) insertAfter--;
 
-    const element = this.playlistElements[previousIndex]
+    const element = this.playlistElements[previousIndex];
 
-    this.playlistElements.splice(previousIndex, 1)
-    this.playlistElements.splice(newIndex, 0, element)
+    this.playlistElements.splice(previousIndex, 1);
+    this.playlistElements.splice(newIndex, 0, element);
 
-    this.videoPlaylistService.reorderVideosOfPlaylist(this.playlist.id, oldPosition, insertAfter)
+    this.videoPlaylistService
+      .reorderVideosOfPlaylist(this.playlist.id, oldPosition, insertAfter)
       .subscribe({
         next: () => {
-          this.reorderClientPositions()
+          this.reorderClientPositions();
         },
 
-        error: err => this.notifier.handleError(err)
-      })
+        error: (err) => this.notifier.handleError(err),
+      });
   }
 
-  onElementRemoved (element: VideoPlaylistElement) {
-    const oldFirst = this.findFirst()
+  onElementRemoved(element: VideoPlaylistElement) {
+    const oldFirst = this.findFirst();
 
-    this.playlistElements = this.playlistElements.filter(v => v.id !== element.id)
-    updatePaginationOnDelete(this.pagination)
-    this.reorderClientPositions(oldFirst)
+    this.playlistElements = this.playlistElements.filter(
+      (v) => v.id !== element.id
+    );
+    updatePaginationOnDelete(this.pagination);
+    this.reorderClientPositions(oldFirst);
   }
 
-  onNearOfBottom () {
+  onNearOfBottom() {
     // Last page
-    if (this.pagination.totalItems <= (this.pagination.currentPage * this.pagination.itemsPerPage)) return
+    if (
+      this.pagination.totalItems <=
+      this.pagination.currentPage * this.pagination.itemsPerPage
+    )
+      return;
 
-    this.pagination.currentPage += 1
-    this.loadElements()
+    this.pagination.currentPage += 1;
+    this.loadElements();
   }
 
-  trackByFn (index: number, elem: VideoPlaylistElement) {
-    return elem.id
+  trackByFn(index: number, elem: VideoPlaylistElement) {
+    return elem.id;
   }
 
-  isRegularPlaylist (playlist: VideoPlaylist) {
-    return playlist?.type.id === VideoPlaylistType.REGULAR
+  isRegularPlaylist(playlist: VideoPlaylist) {
+    return playlist?.type.id === VideoPlaylistType.REGULAR;
   }
 
-  showShareModal () {
-    this.videoShareModal().show()
+  showShareModal() {
+    this.videoShareModal().show();
   }
 
-  async deleteVideoPlaylist (videoPlaylist: VideoPlaylist) {
+  async deleteVideoPlaylist(videoPlaylist: VideoPlaylist) {
     const res = await this.confirmService.confirm(
       $localize`Do you really want to delete ${videoPlaylist.displayName}?`,
       $localize`Delete`
-    )
-    if (res === false) return
+    );
+    if (res === false) return;
 
-    this.videoPlaylistService.removeVideoPlaylist(videoPlaylist)
-      .subscribe({
-        next: () => {
-          this.router.navigate([ '/my-library', 'video-playlists' ])
-          this.notifier.success($localize`Playlist ${videoPlaylist.displayName} deleted.`)
-        },
+    this.videoPlaylistService.removeVideoPlaylist(videoPlaylist).subscribe({
+      next: () => {
+        this.router.navigate(["/my-library", "video-playlists"]);
+        this.notifier.success(
+          $localize`Playlist ${videoPlaylist.displayName} deleted.`
+        );
+      },
 
-        error: err => this.notifier.handleError(err)
-      })
+      error: (err) => this.notifier.handleError(err),
+    });
   }
 
   /**
@@ -162,55 +185,63 @@ export class MyVideoPlaylistElementsComponent implements OnInit, OnDestroy {
    *
    * @see {@link https://github.com/Chocobozzz/PeerTube/issues/2078}
    */
-  getDragStartDelay (): null | number {
+  getDragStartDelay(): null | number {
     if (this.screenService.isInTouchScreen()) {
-      return 500
+      return 500;
     }
 
-    return null
+    return null;
   }
 
-  private loadElements () {
-    this.hooks.wrapObsFun(
-      this.videoPlaylistService.getPlaylistVideos.bind(this.videoPlaylistService),
-      { videoPlaylistId: this.videoPlaylistId, componentPagination: this.pagination },
-      'my-library',
-      'filter:api.my-library.video-playlist-elements.list.params',
-      'filter:api.my-library.video-playlist-elements.list.result'
-    ).subscribe(({ total, data }) => {
-      this.playlistElements = this.playlistElements.concat(data)
-      this.pagination.totalItems = total
+  private loadElements() {
+    this.hooks
+      .wrapObsFun(
+        this.videoPlaylistService.getPlaylistVideos.bind(
+          this.videoPlaylistService
+        ),
+        {
+          videoPlaylistId: this.videoPlaylistId,
+          componentPagination: this.pagination,
+        },
+        "my-library",
+        "filter:api.my-library.video-playlist-elements.list.params",
+        "filter:api.my-library.video-playlist-elements.list.result"
+      )
+      .subscribe(({ total, data }) => {
+        this.playlistElements = this.playlistElements.concat(data);
+        this.pagination.totalItems = total;
 
-      this.onDataSubject.next(data)
-    })
+        this.onDataSubject.next(data);
+      });
   }
 
-  private loadPlaylistInfo () {
-    this.videoPlaylistService.getVideoPlaylist(this.videoPlaylistId)
-      .subscribe(playlist => {
-        this.playlist = playlist
-      })
+  private loadPlaylistInfo() {
+    this.videoPlaylistService
+      .getVideoPlaylist(this.videoPlaylistId)
+      .subscribe((playlist) => {
+        this.playlist = playlist;
+      });
   }
 
-  private reorderClientPositions (first?: VideoPlaylistElement) {
-    if (this.playlistElements.length === 0) return
+  private reorderClientPositions(first?: VideoPlaylistElement) {
+    if (this.playlistElements.length === 0) return;
 
-    const oldFirst = first || this.findFirst()
-    let i = 1
+    const oldFirst = first || this.findFirst();
+    let i = 1;
 
     for (const element of this.playlistElements) {
-      element.position = i
-      i++
+      element.position = i;
+      i++;
     }
 
     // Reload playlist thumbnail if the first element changed
-    const newFirst = this.findFirst()
+    const newFirst = this.findFirst();
     if (oldFirst && newFirst && oldFirst.id !== newFirst.id) {
-      this.loadPlaylistInfo()
+      this.loadPlaylistInfo();
     }
   }
 
-  private findFirst () {
-    return this.playlistElements.find(e => e.position === 1)
+  private findFirst() {
+    return this.playlistElements.find((e) => e.position === 1);
   }
 }
