@@ -22,7 +22,8 @@ export class AuthInterceptor implements HttpInterceptor {
 
   private authService: AuthService
 
-  intercept (req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+  // Refatorado: HttpRequest<any> -> HttpRequest<unknown>
+  intercept (req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
     if (this.authService === undefined) {
       this.authService = this.injector.get(AuthService)
     }
@@ -61,7 +62,8 @@ export class AuthInterceptor implements HttpInterceptor {
       )
   }
 
-  private handleTokenExpired (req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+  // Refatorado: HttpRequest<any> -> HttpRequest<unknown>
+  private handleTokenExpired (req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
     return this.authService.refreshAccessToken()
       .pipe(
         switchMap(() => {
@@ -72,7 +74,8 @@ export class AuthInterceptor implements HttpInterceptor {
       )
   }
 
-  private cloneRequestWithAuth (req: HttpRequest<any>) {
+  // Refatorado: HttpRequest<any> -> HttpRequest<unknown>
+  private cloneRequestWithAuth (req: HttpRequest<unknown>) {
     const authHeaderValue = this.authService.getRequestHeaderValue()
 
     const sameOrigin = req.url.startsWith('/') || isSameOrigin(getBackendUrl(), req.url)
@@ -85,7 +88,8 @@ export class AuthInterceptor implements HttpInterceptor {
     return req.clone({ headers: req.headers.set('Authorization', authHeaderValue) })
   }
 
-  private handleNotAuthenticated (err: HttpErrorResponse): Observable<any> {
+  // Refatorado: Observable<any> -> Observable<string> (of(err.message))
+  private handleNotAuthenticated (err: HttpErrorResponse): Observable<string> {
     this.router.navigate([ '/401' ], { state: { obj: err }, skipLocationChange: true })
     return of(err.message)
   }

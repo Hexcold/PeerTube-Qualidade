@@ -49,7 +49,9 @@ export class UserVideoSettingsComponent implements OnInit, OnDestroy {
   readonly user = input<User>(null)
   readonly reactiveUpdate = input(false, { transform: booleanAttribute })
   readonly notifyOnUpdate = input(true, { transform: booleanAttribute })
-  readonly userInformationLoaded = input<Subject<any>>(undefined)
+  
+  // Refatorado: Subject<any> -> Subject<void> (evento sem payload relevante)
+  readonly userInformationLoaded = input<Subject<void>>(undefined)
 
   form: FormGroup<Form>
   formErrors: FormReactiveErrors = {}
@@ -205,13 +207,19 @@ export class UserVideoSettingsComponent implements OnInit, OnDestroy {
   private handleReactiveUpdate () {
     let oldForm = { ...this.form.value }
 
-    this.formValuesWatcher = this.form.valueChanges.subscribe((formValue: any) => {
+    // Refatorado: removido any do formValue e do acesso indexado
+    this.formValuesWatcher = this.form.valueChanges.subscribe(formValue => {
       const updatedKey = Object.keys(formValue)
-        .find(k => formValue[k] !== ((oldForm as any)[k]))
+        .find(k => {
+            const key = k as keyof typeof formValue;
+            return formValue[key] !== oldForm[key];
+        })
 
       oldForm = { ...this.form.value }
 
-      this.updateDetails([ updatedKey ])
+      if (updatedKey) {
+        this.updateDetails([ updatedKey ])
+      }
     })
   }
 
