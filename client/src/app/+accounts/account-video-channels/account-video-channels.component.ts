@@ -3,8 +3,7 @@ import { RouterLink } from '@angular/router'
 import { ComponentPagination, hasMoreItems, MarkdownService, User, UserService } from '@app/core'
 import { SimpleMemoize } from '@app/helpers'
 import { NSFWPolicyType, VideoSortField } from '@peertube/peertube-models'
-import { from, Subject, Subscription } from 'rxjs'
-import { concatMap, map, switchMap, tap } from 'rxjs/operators'
+import { Subject, Subscription } from 'rxjs'
 import { ActorAvatarComponent } from '../../shared/shared-actor-image/actor-avatar.component'
 import { InfiniteScrollerDirective } from '../../shared/shared-main/common/infinite-scroller.directive'
 import { SubscribeButtonComponent } from '../../shared/shared-user-subscription/subscribe-button.component'
@@ -24,6 +23,7 @@ import { VideoService } from '@app/shared/shared-main/video/video.service'
 })
 export class AccountVideoChannelsComponent implements OnInit, OnDestroy {
   private accountService = inject(AccountService)
+  // injetei o serviço que agora vai cuidar da logica de busca pesada
   private videoChannelService = inject(VideoChannelService)
   private videoService = inject(VideoService)
   private markdown = inject(MarkdownService)
@@ -31,11 +31,10 @@ export class AccountVideoChannelsComponent implements OnInit, OnDestroy {
 
   account: Account
   videoChannels: VideoChannel[] = []
-
   videos: { [id: number]: { total: number, videos: Video[] } } = {}
-
   channelsDescriptionHTML: { [id: number]: string } = {}
 
+  // a logica de paginação continua aqui mas a orquestração foi pro serviço
   channelPagination: ComponentPagination = {
     currentPage: 1,
     itemsPerPage: 2,
@@ -49,7 +48,8 @@ export class AccountVideoChannelsComponent implements OnInit, OnDestroy {
   }
   videosSort: VideoSortField = '-publishedAt'
 
-  onChannelDataSubject = new Subject<any>()
+  // troquei o any por unknown pra seguir a limpeza anterior
+  onChannelDataSubject = new Subject<unknown[]>()
 
   userMiniature: User
   nsfwPolicy: NSFWPolicyType
@@ -64,19 +64,16 @@ export class AccountVideoChannelsComponent implements OnInit, OnDestroy {
   private accountSub: Subscription
 
   ngOnInit () {
-    // Parent get the account for us
     this.accountSub = this.accountService.accountLoaded
       .subscribe(account => {
         this.account = account
         this.videoChannels = []
-
         this.loadMoreChannels()
       })
 
     this.userService.getAnonymousOrLoggedUser()
       .subscribe(user => {
         this.userMiniature = user
-
         this.nsfwPolicy = user.nsfwPolicy
       })
   }
@@ -86,57 +83,33 @@ export class AccountVideoChannelsComponent implements OnInit, OnDestroy {
   }
 
   loadMoreChannels () {
-    const options = {
+    // movi toda aquela cadeia de RxJS (switchMap/concatMap) para o VideoChannelService
+    // o componente agora so "compoe" o resultado na tela
+    this.videoChannelService.listAccountChannelsWithVideos({
       account: this.account,
-      componentPagination: this.channelPagination,
-      sort: '-updatedAt'
-    }
-
-    this.videoChannelService.listAccountChannels(options)
-      .pipe(
-        tap(res => {
-          this.channelPagination.totalItems = res.total
-        }),
-        switchMap(res => from(res.data)),
-        concatMap(videoChannel => {
-          const options = {
-            videoChannel,
-            videoPagination: this.videosPagination,
-            sort: this.videosSort,
-            nsfw: this.videoService.nsfwPolicyToParam(this.nsfwPolicy)
-          }
-
-          return this.videoService.listChannelVideos(options)
-            .pipe(map(data => ({ videoChannel, videos: data.data, total: data.total })))
-        })
-      )
-      .subscribe(async ({ videoChannel, videos, total }) => {
-        this.channelsDescriptionHTML[videoChannel.id] = await this.markdown.textMarkdownToHTML({
-          markdown: videoChannel.description,
-          withEmoji: true,
-          withHtml: true
-        })
-
-        this.videoChannels.push(videoChannel)
-
-        this.videos[videoChannel.id] = { videos, total }
-
-        this.onChannelDataSubject.next([ videoChannel ])
+      channelPagination: this.channelPagination,
+      videosPagination: this.videosPagination,
+      videosSort: this.videosSort,
+      nsfw: this.videoService.nsfwPolicyToParam(this.nsfwPolicy)
+    }).subscribe(async ({ videoChannel, videos, total }) => {
+      this.channelsDescriptionHTML[videoChannel.id] = await this.markdown.textMarkdownToHTML({
+        markdown: videoChannel.description,
+        withEmoji: true,
+        withHtml: true
       })
+
+      this.videoChannels.push(videoChannel)
+      this.videos[videoChannel.id] = { videos, total }
+      this.onChannelDataSubject.next([ videoChannel ])
+    })
   }
 
   getVideosOf (videoChannel: VideoChannel) {
-    const obj = this.videos[videoChannel.id]
-    if (!obj) return []
-
-    return obj.videos
+    return this.videos[videoChannel.id]?.videos || []
   }
 
   getTotalVideosOf (videoChannel: VideoChannel) {
-    const obj = this.videos[videoChannel.id]
-    if (!obj) return undefined
-
-    return obj.total
+    return this.videos[videoChannel.id]?.total
   }
 
   getChannelDescription (videoChannel: VideoChannel) {
@@ -147,7 +120,6 @@ export class AccountVideoChannelsComponent implements OnInit, OnDestroy {
     if (!hasMoreItems(this.channelPagination)) return
 
     this.channelPagination.currentPage += 1
-
     this.loadMoreChannels()
   }
 

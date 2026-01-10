@@ -1,6 +1,5 @@
 import { Component, OnInit, inject, viewChild } from '@angular/core'
-import { ConfirmService, Notifier } from '@app/core'
-import { formatICU } from '@app/helpers'
+import { Notifier } from '@app/core' // Removi o ConfirmService daqui
 import { InstanceFollowService } from '@app/shared/shared-instance/instance-follow.service'
 import { PTDatePipe } from '@app/shared/shared-main/common/date.pipe'
 import { ActorFollow } from '@peertube/peertube-models'
@@ -31,14 +30,12 @@ import { FollowModalComponent } from './follow-modal.component'
 })
 export class FollowingListComponent implements OnInit {
   private notifier = inject(Notifier)
-  private confirmService = inject(ConfirmService)
   private followService = inject(InstanceFollowService)
 
   readonly followModal = viewChild<FollowModalComponent>('followModal')
   readonly table = viewChild<TableComponent<ActorFollow>>('table')
 
   searchFilters: AdvancedInputFilter[] = []
-
   bulkActions: DropdownAction<ActorFollow[]>[] = []
 
   columns: TableColumnInfo<string>[] = [
@@ -69,44 +66,26 @@ export class FollowingListComponent implements OnInit {
     this.followModal().openModal()
   }
 
-  isInstanceFollowing (follow: ActorFollow) {
-    return follow.following.name === 'peertube'
-  }
-
-  buildFollowingName (follow: ActorFollow) {
-    return follow.following.name + '@' + follow.following.host
-  }
-
-  async removeFollowing (follows: ActorFollow[]) {
-    const icuParams = { count: follows.length, entryName: this.buildFollowingName(follows[0]) }
-
-    const message = formatICU(
-      $localize`Do you really want to unfollow {count, plural, =1 {{entryName}?} other {{count} entries?}}`,
-      icuParams
-    )
-
-    const res = await this.confirmService.confirm(message, $localize`Unfollow`)
-    if (res === false) return
-
-    this.followService.unfollow(follows)
+  // deleguei a lógica de decisão e notificação para o serviço especializado
+  removeFollowing (follows: ActorFollow[]) {
+    this.followService.unfollowWithConfirmation(follows)
       .subscribe({
-        next: () => {
-          const message = formatICU(
-            $localize`You are not following {count, plural, =1 {{entryName} anymore.} other {these {count} entries anymore.}}`,
-            icuParams
-          )
-
-          this.notifier.success(message)
-          this.table().loadData()
-        },
-
+        next: () => this.table().loadData(),
         error: err => this.notifier.handleError(err)
       })
   }
 
+  // helper de exibição que poderia ser um Pipe, mas mantive para simplicidade do template
+  buildFollowingName (follow: ActorFollow) {
+    return `${follow.following.name}@${follow.following.host}`
+  }
+
+  isInstanceFollowing (follow: ActorFollow) {
+    return follow.following.name === 'peertube'
+  }
+
   private _dataLoader (options: DataLoaderOptions) {
     const { pagination, sort, search } = options
-
     return this.followService.getFollowing({ pagination, sort, search })
   }
 }

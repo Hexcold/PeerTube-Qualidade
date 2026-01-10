@@ -1,8 +1,9 @@
 import { Component, OnInit, inject, model } from '@angular/core'
-import { FormsModule, ReactiveFormsModule } from '@angular/forms'
+import { FormsModule, ReactiveFormsModule, FormGroup } from '@angular/forms' // adicionei o formgroup
 import { Notifier, UserService } from '@app/core'
-import { FormReactive } from '@app/shared/shared-forms/form-reactive'
-import { FormReactiveService } from '@app/shared/shared-forms/form-reactive.service'
+// troquei o formreactive pelo service que centraliza a logica
+import { FormValidatorService } from '@app/shared/shared-forms/form-validator.service'
+import { FormReactiveErrors, FormReactiveMessages, FormReactiveService } from '@app/shared/shared-forms/form-reactive.service'
 import { PeerTubeTemplateDirective } from '@app/shared/shared-main/common/peertube-template.directive'
 import { User, UserUpdateMe } from '@peertube/peertube-models'
 import { PeertubeCheckboxComponent } from '../../../shared/shared-forms/peertube-checkbox.component'
@@ -13,19 +14,31 @@ import { PeertubeCheckboxComponent } from '../../../shared/shared-forms/peertube
   styleUrls: [ './my-account-email-preferences.component.scss' ],
   imports: [ FormsModule, ReactiveFormsModule, PeertubeCheckboxComponent, PeerTubeTemplateDirective ]
 })
-export class MyAccountEmailPreferencesComponent extends FormReactive implements OnInit {
+// removi o extends pra usar composicao
+export class MyAccountEmailPreferencesComponent implements OnInit {
   protected formReactiveService = inject(FormReactiveService)
   private userService = inject(UserService)
   private notifier = inject(Notifier)
+  private formValidatorService = inject(FormValidatorService)
+
+  // declarei as propriedades de form explicitamente
+  form: FormGroup
+  formErrors: FormReactiveErrors
+  validationMessages: FormReactiveMessages
 
   readonly user = model<User>(undefined)
 
   checkboxLabel: string
 
   ngOnInit () {
-    this.buildForm({
+    // uso o service pra criar o formulario de preferencias
+    const { form, formErrors, validationMessages } = this.formValidatorService.internalBuildForm({
       'email-public': null
     })
+
+    this.form = form
+    this.formErrors = formErrors
+    this.validationMessages = validationMessages
 
     this.form.patchValue({ 'email-public': this.user().emailPublic })
 

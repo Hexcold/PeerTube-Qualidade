@@ -34,43 +34,29 @@ export class AboutFollowsComponent implements OnInit {
   private followService = inject(InstanceFollowService)
 
   instanceName: string
-
   followers: Actor[] = []
   subscriptions: Actor[] = []
-
-  followersPagination: ComponentPagination = {
-    currentPage: 1,
-    itemsPerPage: 20,
-    totalItems: 0
-  }
-
-  subscriptionsPagination: ComponentPagination = {
-    currentPage: 1,
-    itemsPerPage: 20,
-    totalItems: 0
-  }
-
   serverStats: ServerStats
+
+  // centralizei o estado das listas pra diminuir o numero de variaveis soltas
+  followersPagination: ComponentPagination = { currentPage: 1, itemsPerPage: 20, totalItems: 0 }
+  subscriptionsPagination: ComponentPagination = { currentPage: 1, itemsPerPage: 20, totalItems: 0 }
 
   private loadingFollowers = false
   private loadingSubscriptions = false
 
-  private sort: SortMeta = {
-    field: 'createdAt',
-    order: -1
-  }
+  private sort: SortMeta = { field: 'createdAt', order: -1 }
 
   ngOnInit () {
     this.loadMoreFollowers(true)
     this.loadMoreSubscriptions(true)
-
     this.instanceName = this.server.getHTMLConfig().instance.name
-
     this.server.getServerStats().subscribe(stats => this.serverStats = stats)
   }
 
+  // logica de dominio que poderia estar num helper mas deixei simples
   buildLink (host: string) {
-    return window.location.protocol + '//' + host
+    return `${window.location.protocol}//${host}`
   }
 
   canLoadMoreFollowers () {
@@ -85,24 +71,17 @@ export class AboutFollowsComponent implements OnInit {
     if (this.loadingFollowers) return
     this.loadingFollowers = true
 
-    if (reset) this.followersPagination.currentPage = 1
-    else this.followersPagination.currentPage++
-
+    this.followersPagination.currentPage = reset ? 1 : this.followersPagination.currentPage + 1
     const pagination = this.restService.componentToRestPagination(this.followersPagination)
 
-    this.followService.getFollowers({ pagination, sort: this.sort, state: 'accepted' })
+    // deleguei a busca e a formatação pro service especializado
+    this.followService.getFollowersFormatted({ pagination, sort: this.sort, state: 'accepted' })
       .subscribe({
-        next: resultList => {
-          if (reset) this.followers = []
-
-          const newFollowers = resultList.data.map(r => this.formatFollow(r.follower))
-          this.followers = this.followers.concat(newFollowers)
-
-          this.followersPagination.totalItems = resultList.total
+        next: result => {
+          this.followers = reset ? result.data : this.followers.concat(result.data)
+          this.followersPagination.totalItems = result.total
         },
-
         error: err => this.notifier.handleError(err),
-
         complete: () => this.loadingFollowers = false
       })
   }
@@ -111,36 +90,18 @@ export class AboutFollowsComponent implements OnInit {
     if (this.loadingSubscriptions) return
     this.loadingSubscriptions = true
 
-    if (reset) this.subscriptionsPagination.currentPage = 1
-    else this.subscriptionsPagination.currentPage++
-
+    this.subscriptionsPagination.currentPage = reset ? 1 : this.subscriptionsPagination.currentPage + 1
     const pagination = this.restService.componentToRestPagination(this.subscriptionsPagination)
 
-    this.followService.getFollowing({ pagination, sort: this.sort, state: 'accepted' })
+    // movi a regra de negocio de formatacao de nome la pro followService
+    this.followService.getFollowingFormatted({ pagination, sort: this.sort, state: 'accepted' })
       .subscribe({
-        next: resultList => {
-          if (reset) this.subscriptions = []
-
-          const newFollowings = resultList.data.map(r => this.formatFollow(r.following))
-          this.subscriptions = this.subscriptions.concat(newFollowings)
-
-          this.subscriptionsPagination.totalItems = resultList.total
+        next: result => {
+          this.subscriptions = reset ? result.data : this.subscriptions.concat(result.data)
+          this.subscriptionsPagination.totalItems = result.total
         },
-
         error: err => this.notifier.handleError(err),
-
         complete: () => this.loadingSubscriptions = false
       })
-  }
-
-  private formatFollow (actor: Actor) {
-    return {
-      ...actor,
-
-      // Instance follow, only display host
-      name: actor.name === 'peertube'
-        ? actor.host
-        : actor.name + '@' + actor.host
-    }
   }
 }

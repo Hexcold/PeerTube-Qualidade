@@ -1,6 +1,6 @@
 import { NgClass } from '@angular/common'
 import { Component, OnInit, inject } from '@angular/core'
-import { FormsModule, ReactiveFormsModule } from '@angular/forms'
+import { FormsModule, ReactiveFormsModule, FormGroup } from '@angular/forms' // adicionei o formgroup
 import { ActivatedRoute } from '@angular/router'
 import { ServerService } from '@app/core'
 import {
@@ -9,8 +9,9 @@ import {
   FROM_NAME_VALIDATOR,
   SUBJECT_VALIDATOR
 } from '@app/shared/form-validators/instance-validators'
-import { FormReactive } from '@app/shared/shared-forms/form-reactive'
-import { FormReactiveService } from '@app/shared/shared-forms/form-reactive.service'
+// import do serviço que lida com a logica que antes vinha por herança
+import { FormValidatorService } from '@app/shared/shared-forms/form-validator.service'
+import { FormReactiveErrors, FormReactiveMessages } from '@app/shared/shared-forms/form-reactive.service'
 import { AlertComponent } from '@app/shared/shared-main/common/alert.component'
 import { InstanceService } from '@app/shared/shared-main/instance/instance.service'
 import { HTMLServerConfig, HttpStatusCode } from '@peertube/peertube-models'
@@ -25,11 +26,17 @@ type Prefill = {
   styleUrls: [ './about-contact.component.scss' ],
   imports: [ FormsModule, ReactiveFormsModule, NgClass, AlertComponent ]
 })
-export class AboutContactComponent extends FormReactive implements OnInit {
-  protected formReactiveService = inject(FormReactiveService)
+// removi o extends pra seguir o principio de composição
+export class AboutContactComponent implements OnInit {
+  private formValidatorService = inject(FormValidatorService)
   private route = inject(ActivatedRoute)
   private instanceService = inject(InstanceService)
   private serverService = inject(ServerService)
+
+  // declarei as propriedades explicitamente em vez de herdar no escuro
+  form: FormGroup
+  formErrors: FormReactiveErrors
+  validationMessages: FormReactiveMessages
 
   error: string
   success: string
@@ -43,12 +50,17 @@ export class AboutContactComponent extends FormReactive implements OnInit {
   ngOnInit () {
     this.serverConfig = this.serverService.getHTMLConfig()
 
-    this.buildForm({
+    // agora uso o serviço injetado pra construir o form
+    const { form, formErrors, validationMessages } = this.formValidatorService.internalBuildForm({
       fromName: FROM_NAME_VALIDATOR,
       fromEmail: FROM_EMAIL_VALIDATOR,
       subject: SUBJECT_VALIDATOR,
       body: BODY_VALIDATOR
     })
+
+    this.form = form
+    this.formErrors = formErrors
+    this.validationMessages = validationMessages
 
     this.prefillForm(this.route.snapshot.queryParams)
   }

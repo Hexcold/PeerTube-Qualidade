@@ -72,16 +72,19 @@ export class PreviewUploadComponent implements OnInit, ControlValueAccessor {
     this.updatePreview()
   }
 
-  propagateChange = (_: any) => {
+  // troquei o any por blob porque esse componente so propaga arquivos
+  propagateChange = (_: Blob) => {
     // empty
   }
 
-  writeValue (file: any) {
+  // aqui o angular injeta o valor do form, que nesse caso deve ser um blob
+  writeValue (file: Blob) {
     this.file = file
     this.updatePreview()
   }
 
-  registerOnChange (fn: (_: any) => void) {
+  // tipando o callback pra receber o blob corretamente
+  registerOnChange (fn: (file: Blob) => void) {
     this.propagateChange = fn
   }
 
@@ -91,6 +94,7 @@ export class PreviewUploadComponent implements OnInit, ControlValueAccessor {
 
   private updatePreview () {
     if (this.file) {
+      // o result aqui e uma string base64 entao o fluxo fica seguro
       imageToDataURL(this.file).then(result => this.imageSrc = result)
     } else {
       this.imageSrc = undefined
