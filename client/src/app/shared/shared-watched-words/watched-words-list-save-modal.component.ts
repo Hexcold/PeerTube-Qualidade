@@ -1,13 +1,14 @@
 import { NgClass } from '@angular/common'
 import { Component, ElementRef, OnInit, inject, input, output, viewChild } from '@angular/core'
-import { FormsModule, ReactiveFormsModule } from '@angular/forms'
-import { Notifier } from '@app/core'
-import { FormReactive } from '@app/shared/shared-forms/form-reactive'
-import { FormReactiveService } from '@app/shared/shared-forms/form-reactive.service'
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms'
 import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap'
+import { Notifier } from '@app/core'
 import { WatchedWordsList } from '@peertube/peertube-models'
 import { splitAndGetNotEmpty } from '@root-helpers/string'
-import { UNIQUE_WATCHED_WORDS_VALIDATOR, WATCHED_WORDS_LIST_NAME_VALIDATOR } from '../form-validators/watched-words-list-validators'
+import {
+  UNIQUE_WATCHED_WORDS_VALIDATOR,
+  WATCHED_WORDS_LIST_NAME_VALIDATOR
+} from '../form-validators/watched-words-list-validators'
 import { GlobalIconComponent } from '../shared-icons/global-icon.component'
 import { WatchedWordsListService } from './watched-words-list.service'
 
@@ -17,32 +18,36 @@ import { WatchedWordsListService } from './watched-words-list.service'
   templateUrl: './watched-words-list-save-modal.component.html',
   imports: [ FormsModule, ReactiveFormsModule, GlobalIconComponent, NgClass ]
 })
-export class WatchedWordsListSaveModalComponent extends FormReactive implements OnInit {
-  protected formReactiveService = inject(FormReactiveService)
+export class WatchedWordsListSaveModalComponent implements OnInit {
+  private fb = inject(FormBuilder)
   private modalService = inject(NgbModal)
   private notifier = inject(Notifier)
   private watchedWordsService = inject(WatchedWordsListService)
 
   readonly accountName = input.required<string>()
-
   readonly listAddedOrUpdated = output()
 
   readonly modal = viewChild<ElementRef>('modal')
 
-  private openedModal: NgbModalRef
-  private listToUpdate: WatchedWordsList
+  form!: FormGroup
+
+  private openedModal!: NgbModalRef
+  private listToUpdate?: WatchedWordsList
 
   ngOnInit () {
-    this.buildForm({
-      listName: WATCHED_WORDS_LIST_NAME_VALIDATOR,
-      words: UNIQUE_WATCHED_WORDS_VALIDATOR
+    this.form = this.fb.group({
+      listName: [ '', WATCHED_WORDS_LIST_NAME_VALIDATOR ],
+      words: [ '', UNIQUE_WATCHED_WORDS_VALIDATOR ]
     })
   }
 
   show (list?: WatchedWordsList) {
     this.listToUpdate = list
 
-    this.openedModal = this.modalService.open(this.modal(), { centered: true, keyboard: false })
+    this.openedModal = this.modalService.open(this.modal(), {
+      centered: true,
+      keyboard: false
+    })
 
     if (list) {
       this.form.patchValue({
@@ -55,32 +60,34 @@ export class WatchedWordsListSaveModalComponent extends FormReactive implements 
   hide () {
     this.openedModal.close()
     this.form.reset()
-
     this.listToUpdate = undefined
   }
 
   addOrUpdate () {
-    const commonParams = {
+    if (this.form.invalid) return
+
+    const params = {
       accountName: this.accountName(),
-      listName: this.form.value['listName'],
-      words: splitAndGetNotEmpty(this.form.value['words'])
+      listName: this.form.value.listName,
+      words: splitAndGetNotEmpty(this.form.value.words)
     }
 
-    const obs = this.listToUpdate
-      ? this.watchedWordsService.updateList({ ...commonParams, listId: this.listToUpdate.id })
-      : this.watchedWordsService.addList(commonParams)
+    const request$ = this.listToUpdate
+      ? this.watchedWordsService.updateList({
+          ...params,
+          listId: this.listToUpdate.id
+        })
+      : this.watchedWordsService.addList(params)
 
-    obs.subscribe({
+    request$.subscribe({
       next: () => {
-        if (this.listToUpdate) {
-          this.notifier.success($localize`${commonParams.listName} updated`)
-        } else {
-          this.notifier.success($localize`${commonParams.listName} created`)
-        }
+        const message = this.listToUpdate
+          ? $localize`${params.listName} updated`
+          : $localize`${params.listName} created`
 
+        this.notifier.success(message)
         this.listAddedOrUpdated.emit()
       },
-
       error: err => this.notifier.handleError(err)
     })
 

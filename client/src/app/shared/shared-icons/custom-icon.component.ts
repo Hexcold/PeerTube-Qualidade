@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, inject, input } from '@angular/core'
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Renderer2,
+  inject,
+  input
+} from '@angular/core'
 
 @Component({
   selector: 'my-custom-icon',
@@ -7,15 +15,17 @@ import { ChangeDetectionStrategy, Component, ElementRef, OnInit, inject, input }
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true
 })
-export class CustomIconComponent implements OnInit {
-  private el = inject(ElementRef)
+export class CustomIconComponent implements AfterViewInit {
+  private host = inject<ElementRef<HTMLElement>>(ElementRef)
+  private renderer = inject(Renderer2)
 
   readonly html = input.required<string>()
 
-  ngOnInit () {
-    const nativeElement = this.el.nativeElement as HTMLElement
+  ngAfterViewInit () {
+    const element = this.host.nativeElement
 
-    nativeElement.innerHTML = this.html()
-    nativeElement.ariaHidden = 'true'
+    this.renderer.setProperty(element, 'innerHTML', '')
+    this.renderer.setProperty(element, 'innerHTML', this.html())
+    this.renderer.setAttribute(element, 'aria-hidden', 'true')
   }
 }
