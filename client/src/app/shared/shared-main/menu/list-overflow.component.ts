@@ -6,19 +6,22 @@ import {
   ChangeDetectorRef,
   Component,
   ElementRef,
-  HostListener,
+  OnDestroy,
   OnInit,
   TemplateRef,
   inject,
   input,
   viewChild,
-  viewChildren
+  viewChildren,
+  Renderer2,
+  NgZone
 } from '@angular/core'
 import { ScreenService } from '@app/core'
 import { NgbDropdown, NgbDropdownMenu, NgbDropdownToggle, NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { randomInt } from '@peertube/peertube-core-utils'
 import debug from 'debug'
 import { lowerFirst, uniqueId } from 'lodash-es'
+import { Subject, takeUntil } from 'rxjs'
 
 const debugLogger = debug('peertube:main:ListOverflowItem')
 
@@ -42,19 +45,21 @@ export interface ListOverflowItem {
     SlicePipe
   ]
 })
-export class ListOverflowComponent<T extends ListOverflowItem> implements OnInit, AfterViewInit {
+export class ListOverflowComponent<T extends ListOverflowItem>
+  implements OnInit, AfterViewInit, OnDestroy {
+
   private cdr = inject(ChangeDetectorRef)
   private modalService = inject(NgbModal)
   private screenService = inject(ScreenService)
+  private renderer = inject(Renderer2)
+  private zone = inject(NgZone)
+
+  private destroy$ = new Subject<void>()
+  private removeResizeListener?: () => void
+  private randomInt: number
 
   readonly items = input<T[]>(undefined)
-  readonly itemTemplate = input<
-    TemplateRef<{
-      item: T
-      dropdown?: boolean
-      modal?: boolean
-    }>
-  >(undefined)
+  readonly itemTemplate = input<TemplateRef<{ item: T; dropdown?: boolean; modal?: boolean }>>(undefined)
   readonly hasBorder = input(false, { transform: booleanAttribute })
 
   readonly modal = viewChild<ElementRef>('modal')
@@ -65,44 +70,56 @@ export class ListOverflowComponent<T extends ListOverflowItem> implements OnInit
   isInMobileView = false
   initialized = false
 
-  private randomInt: number
-
   ngOnInit () {
     this.randomInt = randomInt(1, 2000)
   }
 
   ngAfterViewInit () {
-    setTimeout(() => {
-      this.onWindowResize()
-      this.initialized = true
-    }, 0)
+    this.zone.onStable
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.recalculate()
+        this.initialized = true
+      })
+
+    this.zone.runOutsideAngular(() => {
+      this.removeResizeListener = this.renderer.listen(
+        'window',
+        'resize',
+        () => this.zone.run(() => this.recalculate())
+      )
+    })
+  }
+
+  ngOnDestroy () {
+    this.destroy$.next()
+    this.destroy$.complete()
+    this.removeResizeListener?.()
   }
 
   isMenuDisplayed () {
-    return !!this.showItemsUntilIndexExcluded
+    return this.showItemsUntilIndexExcluded !== undefined
   }
 
-  @HostListener('window:resize')
-  onWindowResize () {
+  private recalculate () {
+    if (!this.parent() || this.itemsRendered().length === 0) return
+
     this.isInMobileView = !!this.screenService.isInMobileView()
 
     const parentWidth = this.parent().nativeElement.getBoundingClientRect().width
-    let showItemsUntilIndexExcluded: number
     let accWidth = 0
-
-    debugLogger('Parent width is %d', parentWidth)
+    let cutoffIndex: number = undefined
 
     for (const [ index, el ] of this.itemsRendered().entries()) {
       accWidth += el.nativeElement.getBoundingClientRect().width
-
-      if (showItemsUntilIndexExcluded === undefined) {
-        showItemsUntilIndexExcluded = (parentWidth < accWidth) ? index : undefined
+      if (cutoffIndex === undefined && accWidth > parentWidth) {
+        cutoffIndex = index
       }
     }
 
-    debugLogger('Accumulated children width is %d so exclude index is %d', accWidth, showItemsUntilIndexExcluded)
+    debugLogger('Parent %d | Acc %d | Cut %d', parentWidth, accWidth, cutoffIndex)
 
-    this.showItemsUntilIndexExcluded = showItemsUntilIndexExcluded
+    this.showItemsUntilIndexExcluded = cutoffIndex
     this.cdr.markForCheck()
   }
 

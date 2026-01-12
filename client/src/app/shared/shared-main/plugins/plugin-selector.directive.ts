@@ -1,23 +1,42 @@
-import { Directive, ElementRef, OnInit, Renderer2, inject, input } from '@angular/core'
+import {
+  Directive,
+  ElementRef,
+  AfterViewInit,
+  Renderer2,
+  inject,
+  input
+} from '@angular/core'
 import { PluginSelectorId } from '@peertube/peertube-models'
 
 @Directive({
   selector: '[myPluginSelector]',
   standalone: true
 })
-export class PluginSelectorDirective implements OnInit {
+export class PluginSelectorDirective implements AfterViewInit {
   private renderer = inject(Renderer2)
-  private hostElement = inject<ElementRef<HTMLElement>>(ElementRef)
+  private host = inject<ElementRef<HTMLElement>>(ElementRef)
 
   readonly pluginSelectorId = input<PluginSelectorId>(undefined)
 
-  ngOnInit () {
+  ngAfterViewInit () {
     const pluginSelectorId = this.pluginSelectorId()
     if (!pluginSelectorId) return
 
-    const id = this.hostElement.nativeElement.getAttribute('id')
-    if (id) throw new Error('Cannot set id on element that already has an id')
+    const element = this.host.nativeElement
+    const existingId = element.getAttribute('id')
 
-    this.renderer.setAttribute(this.hostElement.nativeElement, 'id', `plugin-selector-${pluginSelectorId}`)
+    if (existingId) {
+      console.warn(
+        `[PluginSelectorDirective] Element already has id="${existingId}". ` +
+        `Skipping plugin selector id assignment.`
+      )
+      return
+    }
+
+    this.renderer.setAttribute(
+      element,
+      'id',
+      `plugin-selector-${pluginSelectorId}`
+    )
   }
 }

@@ -1,13 +1,25 @@
-import { AfterViewChecked, booleanAttribute, Directive, ElementRef, inject, input, OnDestroy, OnInit, output } from '@angular/core'
+import {
+  Directive,
+  ElementRef,
+  Renderer2,
+  inject,
+  input,
+  output,
+  OnInit,
+  OnDestroy,
+  AfterViewInit,
+  booleanAttribute
+} from '@angular/core'
 import { fromEvent, Observable, Subscription } from 'rxjs'
-import { distinctUntilChanged, filter, map, share, startWith, throttleTime } from 'rxjs/operators'
+import { filter, map, throttleTime, distinctUntilChanged, startWith } from 'rxjs/operators'
 
 @Directive({
   selector: '[myInfiniteScroller]',
   standalone: true
 })
-export class InfiniteScrollerDirective implements OnInit, OnDestroy, AfterViewChecked {
-  private el = inject(ElementRef)
+export class InfiniteScrollerDirective implements OnInit, AfterViewInit, OnDestroy {
+  private el = inject(ElementRef<HTMLElement>)
+  private renderer = inject(Renderer2)
 
   readonly percentLimit = input(70)
   readonly onItself = input(false, { transform: booleanAttribute })
@@ -15,95 +27,99 @@ export class InfiniteScrollerDirective implements OnInit, OnDestroy, AfterViewCh
 
   readonly nearOfBottom = output()
 
+  private container!: HTMLElement
+  private scrollTarget!: HTMLElement | Window
+  private scrollSub?: Subscription
+  private dataSub?: Subscription
+
+  private lastScrollTop = 0
   private decimalLimit = 0
-  private lastCurrentBottom: number
-  private scrollDownSub: Subscription
-  private container: HTMLElement
 
-  private checkScroll = false
-
-  constructor () {
+  ngOnInit () {
     this.decimalLimit = this.percentLimit() / 100
   }
 
-  ngAfterViewChecked () {
-    if (this.checkScroll) {
-      this.checkScroll = false
-
-      // Wait HTML update
-      setTimeout(() => {
-        if (this.hasScroll() === false) this.nearOfBottom.emit()
-      })
-    }
-  }
-
-  ngOnInit () {
-    this.initialize()
+  ngAfterViewInit () {
+    this.resolveScrollContainer()
+    this.listenScroll()
+    this.listenDataChanges()
+    this.checkInitialScroll()
   }
 
   ngOnDestroy () {
-    if (this.scrollDownSub) this.scrollDownSub.unsubscribe()
+    this.scrollSub?.unsubscribe()
+    this.dataSub?.unsubscribe()
   }
 
-  initialize () {
-    this.container = this.onItself()
-      ? this.el.nativeElement
-      : document.documentElement
 
-    // Emit the last value
-    const throttleOptions = { leading: true, trailing: true }
+  private resolveScrollContainer () {
+    if (this.onItself()) {
+      this.container = this.el.nativeElement
+      this.scrollTarget = this.container
+    } else {
+      this.container = document.scrollingElement as HTMLElement
+      this.scrollTarget = window
+    }
+  }
 
-    const scrollableElement = this.onItself() ? this.container : window
-    const scrollObservable = fromEvent(scrollableElement, 'scroll')
+  private listenScroll () {
+    this.scrollSub = fromEvent(this.scrollTarget, 'scroll')
       .pipe(
-        startWith(true),
-        throttleTime(200, undefined, throttleOptions),
+        startWith(null),
+        throttleTime(150, undefined, { leading: true, trailing: true }),
         map(() => this.getScrollInfo()),
-        distinctUntilChanged((o1, o2) => o1.current === o2.current),
-        share()
-      )
-
-    // Scroll Down
-    this.scrollDownSub = scrollObservable
-      .pipe(
-        filter(({ current }) => this.isScrollingDown(current)),
-        filter(({ current, maximumScroll }) => (current / maximumScroll) > this.decimalLimit)
+        distinctUntilChanged((a, b) => a.current === b.current),
+        filter(info => this.isScrollingDown(info.current)),
+        filter(info => info.maximum > 0 && (info.current / info.maximum) >= this.decimalLimit)
       )
       .subscribe(() => {
         this.nearOfBottom.emit()
       })
-
-    const dataObservable = this.dataObservable()
-    if (dataObservable) {
-      dataObservable
-        .pipe(filter(d => d.length !== 0))
-        .subscribe(() => this.checkScroll = true)
-    }
   }
 
+  private listenDataChanges () {
+    const data$ = this.dataObservable()
+    if (!data$) return
+
+    this.dataSub = data$
+      .pipe(filter(d => d.length > 0))
+      .subscribe(() => {
+        this.checkIfNoScroll()
+      })
+  }
+
+
   private getScrollInfo () {
-    return { current: this.container.scrollTop, maximumScroll: this.getMaximumScroll() }
+    const current = this.onItself()
+      ? this.container.scrollTop
+      : window.scrollY
+
+    const maximum = this.getMaximumScroll()
+
+    return { current, maximum }
   }
 
   private getMaximumScroll () {
-    const elementHeight = this.onItself() ? this.container.clientHeight : window.innerHeight
+    const height = this.onItself()
+      ? this.container.clientHeight
+      : window.innerHeight
 
-    return this.container.scrollHeight - elementHeight
-  }
-
-  private hasScroll () {
-    return this.getMaximumScroll() > 0
+    return this.container.scrollHeight - height
   }
 
   private isScrollingDown (current: number) {
-    if (this.lastCurrentBottom === undefined) {
-      this.lastCurrentBottom = current
-      return false
+    const down = current > this.lastScrollTop
+    this.lastScrollTop = current
+    return down
+  }
+
+  private checkIfNoScroll () {
+    if (this.getMaximumScroll() <= 0) {
+      this.nearOfBottom.emit()
     }
+  }
 
-    const result = this.lastCurrentBottom < current
-
-    this.lastCurrentBottom = current
-    return result
+  private checkInitialScroll () {
+    this.checkIfNoScroll()
   }
 }
